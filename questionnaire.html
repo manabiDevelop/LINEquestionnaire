@@ -92,7 +92,7 @@
 
 <script>
   const GAS_ENDPOINT_URL =
-    "https://script.google.com/macros/s/AKfycbx_RrRtWIMGuUjw5GXe41cmrWnRDfOqUSMH9pXnVeEGDWDhzE7SoTWcL74eqcXL0lGV/exec";
+    "https://script.google.com/macros/s/AKfycbzr-aA_mnP_sHV4ablOWEiCAg5KXpKdWt3kFcXzYm9k6pM8t0-tLARcI5o-qEfYwb4y/exec";
 
   const USE_LIFF = true;
 
@@ -108,7 +108,7 @@
     const direct = url.searchParams.get(name);
     if (direct !== null) return direct;
 
-    // liff.state 対応
+    
     const state = url.searchParams.get("liff.state");
     if (state) {
       try {
