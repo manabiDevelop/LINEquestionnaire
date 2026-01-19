@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NPS Survey TEST</title>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;
+      margin: 0;
+      background: #f6f7f9;
+      color: #111;
+    }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 18px; }
+    .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .sub { font-size: 13px; color: #555; margin-bottom: 16px; line-height: 1.5; }
+    .scoreBox { display: flex; align-items: baseline; gap: 10px; margin: 12px 0 10px; }
+    .score { font-size: 42px; font-weight: 800; }
+    .label { font-size: 14px; color: #444; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .row { display: flex; gap: 10px; margin-top: 12px; }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { background: #06c755; color: #fff; }
+    .primary:disabled { opacity: .55; cursor: not-allowed; }
+    .ghost { background: #eef1f4; color: #111; }
+    .msg { margin-top: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .ok { color: #0a7a2f; }
+    .ng { color: #b00020; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>アンケート</h1>
+      <div class="sub">
+        ありがとうございます。よろしければ、スコアの理由を一言だけ教えてください（任意）。
+      </div>
+
+      <div class="scoreBox">
+        <div class="score" id="scoreText">-</div>
+        <div class="label" id="scoreLabel">スコアを読み込み中…</div>
+      </div>
+
+      <textarea id="comment" placeholder="例：説明がわかりやすかった / 宿題の量がちょうど良い など（任意）"></textarea>
+
+      <div class="row">
+        <button class="primary" id="sendBtn" type="button">送信する</button>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button class="ghost" id="resetBtn" type="button">入力をクリア</button>
+      </div>
+
+      <div class="msg" id="msg"></div>
+
+      <!-- hidden iframe -->
+      <iframe id="hiddenPostFrame" name="hiddenPostFrame" style="display:none;"></iframe>
+
+      <!-- hidden form -->
+      <form id="hiddenPostForm" method="POST" target="hiddenPostFrame" style="display:none;">
+        <input type="hidden" name="userId" />
+        <input type="hidden" name="teacherid" />
+        <input type="hidden" name="classId" />
+        <input type="hidden" name="score" />
+        <input type="hidden" name="comment" />
+        <input type="hidden" name="source" />
+        <input type="hidden" name="timestamp" />
+      </form>
+    </div>
+  </div>
+
+<script>
+  const GAS_ENDPOINT_URL =
+    "https://script.google.com/macros/s/AKfycbx_RrRtWIMGuUjw5GXe41cmrWnRDfOqUSMH9pXnVeEGDWDhzE7SoTWcL74eqcXL0lGV/exec";
+
+  const USE_LIFF = true;
+
+  function setMsg(text, cls) {
+    const el = document.getElementById("msg");
+    el.className = "msg " + (cls || "");
+    el.textContent = text;
+  }
+
+  function getQueryParam(name) {
+    const url = new URL(window.location.href);
+
+    const direct = url.searchParams.get(name);
+    if (direct !== null) return direct;
+
+    // liff.state 対応
+    const state = url.searchParams.get("liff.state");
+    if (state) {
+      try {
+        const decoded = decodeURIComponent(state);
+        const qs = decoded.startsWith("?") ? decoded.slice(1) : decoded;
+        const p2 = new URLSearchParams(qs);
+        const v2 = p2.get(name);
+        if (v2 !== null) return v2;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function parseScore(raw) {
+    if (raw === null || raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n)) return null;
+    if (n < 0 || n > 10) return null;
+    return n;
+  }
+
+  function nowISO() {
+    return new Date().toISOString();
+  }
+
+  function setScoreUI(score) {
+    const scoreText = document.getElementById("scoreText");
+    const scoreLabel = document.getElementById("scoreLabel");
+    if (score === null) {
+      scoreText.textContent = "-";
+      scoreLabel.textContent = "スコア不明";
+    } else {
+      scoreText.textContent = String(score);
+      scoreLabel.textContent = `スコア${score}の理由（任意）`;
+    }
+  }
+
+  function postByHiddenIframe(payload) {
+    return new Promise((resolve) => {
+      const form = document.getElementById("hiddenPostForm");
+      const iframe = document.getElementById("hiddenPostFrame");
+
+      form.action = GAS_ENDPOINT_URL;
+
+      form.userId.value = payload.userId;
+      form.teacherid.value = payload.teacherid;
+      form.classId.value = payload.classId;
+      form.score.value = payload.score;
+      form.comment.value = payload.comment;
+      form.source.value = payload.source;
+      form.timestamp.value = payload.timestamp;
+
+      iframe.onload = () => resolve(true);
+      form.submit();
+    });
+  }
+
+  let lineUserId = null;
+
+  async function init() {
+    if (USE_LIFF && window.liff) {
+      try {
+        await liff.init({ liffId: "2008913027-v02rfm0M" });
+
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          lineUserId = profile.userId; 
+        } else {
+          liff.login();
+          return;
+        }
+      } catch (e) {
+        console.warn("LIFF init failed:", e);
+      }
+    }
+
+    const score = parseScore(getQueryParam("score"));
+    const classId = getQueryParam("class_id") || " ";
+    const teacherid = getQueryParam("teacher_id") || " ";
+    setScoreUI(score);
+
+    const sendBtn = document.getElementById("sendBtn");
+
+    sendBtn.addEventListener("click", async () => {
+      if (score === null) {
+        setMsg("score が取得できませんでした。", "ng");
+        return;
+      }
+
+      sendBtn.disabled = true;
+      setMsg("送信中…");
+
+      const payload = {
+        timestamp: nowISO(),
+        userId: lineUserId || " ", 
+        teacherid,
+        classId,
+        score,
+        comment: document.getElementById("comment").value.trim(),
+        source: USE_LIFF ? "LIFF" : "WEB"
+      };
+
+      await postByHiddenIframe(payload);
+      setMsg("送信しました。ご協力ありがとうございました！", "ok");
+      sendBtn.disabled = false;
+    });
+
+    document.getElementById("resetBtn").onclick = () => {
+      document.getElementById("comment").value = "";
+      setMsg("");
+    };
+  }
+
+
+  init();
+</script>
+</body>
+</html>
