@@ -99,6 +99,7 @@
 
   function setMsg(text, cls) {
     const el = document.getElementById("msg");
+    if (!el) return;
     el.className = "msg " + (cls || "");
     el.textContent = text;
   }
@@ -109,7 +110,7 @@
     const direct = url.searchParams.get(name);
     if (direct !== null) return direct;
 
-    
+    // liff
     const state = url.searchParams.get("liff.state");
     if (state) {
       try {
@@ -138,6 +139,8 @@
   function setScoreUI(score) {
     const scoreText = document.getElementById("scoreText");
     const scoreLabel = document.getElementById("scoreLabel");
+    if (!scoreText || !scoreLabel) return;
+
     if (score === null) {
       scoreText.textContent = "-";
       scoreLabel.textContent = "スコア不明";
@@ -147,37 +150,83 @@
     }
   }
 
+  // 送信完了画面
+  function showCompleteScreen_() {
+    const card = document.querySelector(".card");
+    if (!card) return;
+
+    card.innerHTML = `
+      <div style="padding-top:40px; padding-bottom:40px;">
+        <div style="height:30px;"></div>
+        <div style="font-size:24px;font-weight:800;margin-bottom:20px;color:#111;">
+          送信完了
+        </div>
+        <div style="font-size:15px;line-height:1.8;color:#444;">
+          アンケートのご回答ありがとうございました。<br>
+          いただいたご意見はサービス内容向上に活用させていただきます。
+        </div>
+      </div>
+    `;
+  }
+
+
   function postByHiddenIframe(payload) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const form = document.getElementById("hiddenPostForm");
       const iframe = document.getElementById("hiddenPostFrame");
+      if (!form || !iframe) {
+        reject(new Error("hidden form/iframe not found"));
+        return;
+      }
 
       form.action = GAS_ENDPOINT_URL;
 
       form.userId.value = payload.userId;
       form.teacherid.value = payload.teacherid;
       form.classId.value = payload.classId;
-      form.score.value = payload.score;
+      form.score.value = String(payload.score);
       form.comment.value = payload.comment;
       form.studentid.value = payload.studentid;
       form.source.value = payload.source;
       form.timestamp.value = payload.timestamp;
 
-      iframe.onload = () => resolve(true);
-      form.submit();
+      let done = false;
+
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve({ ok: true, via: "timeout" }); 
+      }, 8000);
+
+      iframe.onload = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ ok: true, via: "iframe.onload" });
+      };
+
+      try {
+        form.submit(); 
+      } catch (e) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        reject(e);
+      }
     });
   }
 
   let lineUserId = null;
 
   async function init() {
+    // LIFF
     if (USE_LIFF && window.liff) {
       try {
         await liff.init({ liffId: "2008924015-jxNv8Rio" });
 
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          lineUserId = profile.userId; 
+          lineUserId = profile.userId;
         } else {
           liff.login();
           return;
@@ -191,9 +240,13 @@
     const classId = getQueryParam("class_id") || " ";
     const teacherid = getQueryParam("teacher_id") || " ";
     const studentid = getQueryParam("student_id") || " ";
+
     setScoreUI(score);
 
     const sendBtn = document.getElementById("sendBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    if (!sendBtn) return;
 
     sendBtn.addEventListener("click", async () => {
       if (score === null) {
@@ -201,33 +254,44 @@
         return;
       }
 
+
       sendBtn.disabled = true;
       setMsg("送信中…");
 
       const payload = {
         timestamp: nowISO(),
-        userId: lineUserId || " ", 
+        userId: lineUserId || " ",
         teacherid,
         classId,
         score,
-        comment: document.getElementById("comment").value.trim(),
+        comment: (document.getElementById("comment")?.value || "").trim(),
         studentid,
         source: USE_LIFF ? "LIFF" : "WEB"
       };
 
-      await postByHiddenIframe(payload);
-      setMsg("送信しました。ご協力ありがとうございました！", "ok");
-      sendBtn.disabled = false;
+      try {
+        
+        await postByHiddenIframe(payload);
+        showCompleteScreen_();
+
+      } catch (e) {
+        console.warn("post failed:", e);
+        setMsg("送信に失敗しました。通信状況をご確認の上、もう一度お試しください。", "ng");
+        sendBtn.disabled = false;
+      }
     });
 
-    document.getElementById("resetBtn").onclick = () => {
-      document.getElementById("comment").value = "";
-      setMsg("");
-    };
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        const c = document.getElementById("comment");
+        if (c) c.value = "";
+        setMsg("");
+      };
+    }
   }
-
 
   init();
 </script>
 </body>
 </html>
+
