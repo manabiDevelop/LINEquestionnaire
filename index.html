@@ -84,6 +84,8 @@
         <input type="hidden" name="classId" />
         <input type="hidden" name="score" />
         <input type="hidden" name="comment" />
+        <input type="hidden" name="studentid" />
+        <input type="hidden" name="relationship" />
         <input type="hidden" name="source" />
         <input type="hidden" name="timestamp" />
       </form>
@@ -188,6 +190,8 @@
     const score = parseScore(getQueryParam("score"));
     const classId = getQueryParam("class_id") || " ";
     const teacherid = getQueryParam("teacher_id") || " ";
+    const studentid = getQueryParam("student_id") || " ";
+    const studentid = getQueryParam("relationship") || " ";
     setScoreUI(score);
 
     const sendBtn = document.getElementById("sendBtn");
@@ -208,6 +212,8 @@
         classId,
         score,
         comment: document.getElementById("comment").value.trim(),
+        studentid,
+        relationship,
         source: USE_LIFF ? "LIFF" : "WEB"
       };
 
